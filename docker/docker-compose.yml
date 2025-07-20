@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: legal_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=legal_ai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001/api
+      - REACT_APP_WS_URL=http://localhost:3001
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    command: npm start
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
