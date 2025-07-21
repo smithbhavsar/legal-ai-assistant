@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { chatAPI } from '../services/api';
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { historyAPI } from '../services/api';
 
 const ChatContext = createContext();
 
@@ -19,6 +20,8 @@ export const ChatProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [socket, setSocket] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [selectedApi, setSelectedApi] = useState('research'); // 'research' or 'guidance'
 
   // Initialize socket connection
   useEffect(() => {
@@ -50,6 +53,39 @@ export const ChatProvider = ({ children }) => {
     };
   }, []);
 
+  // Fetch sessions from API
+  const fetchSessions = async () => {
+    try {
+      const { sessions } = await historyAPI.getSessions();
+      setSessions(sessions || []);
+    } catch (error) {
+      toast.error('Failed to load chat history');
+      setSessions([]);
+    }
+  };
+
+  // Fetch sessions on mount
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const selectSession = async (sessionId) => {
+    try {
+      setLoading(true);
+      const { session, messages } = await historyAPI.getSession(sessionId);
+      setCurrentSession(session);
+      setMessages((messages || []).map(msg => ({ ...msg, timestamp: msg.created_at || msg.timestamp })));
+      // Join socket room
+      if (socket) {
+        socket.emit('join-session', session.id);
+      }
+    } catch (error) {
+      toast.error('Failed to load session');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const startNewSession = async (title = 'New Consultation', jurisdiction = null) => {
     try {
       setLoading(true);
@@ -61,7 +97,8 @@ export const ChatProvider = ({ children }) => {
       if (socket) {
         socket.emit('join-session', response.session.id);
       }
-      
+      // Refresh sessions list
+      await fetchSessions();
       return response.session;
     } catch (error) {
       toast.error('Failed to start new session');
@@ -71,7 +108,7 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
-  const sendMessage = async (message, urgent = false) => {
+  const sendMessage = async (message, urgent = false, api = selectedApi) => {
     if (!currentSession) {
       toast.error('No active session. Please start a new session.');
       return;
@@ -90,35 +127,21 @@ export const ChatProvider = ({ children }) => {
       };
       setMessages(prev => [...prev, userMessage]);
 
-      // Send to API
-      const response = await chatAPI.sendMessage(currentSession.id, message, urgent);
-      
-      // If offline mode, add messages immediately
-      if (response.offline) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            type: 'research_ai',
-            content: response.research.content,
-            confidence: response.research.confidence,
-            timestamp: new Date().toISOString(),
-          },
-          {
-            id: Date.now() + 2,
-            type: 'guidance_ai',
-            content: response.guidance.content,
-            confidence: response.guidance.confidence,
-            timestamp: new Date().toISOString(),
-          }
-        ]);
-        
-        toast.warning('Operating in offline mode');
-      }
+      // Debug: Log before backend call
+      console.log('[sendMessage] Sending to backend:', { sessionId: currentSession.id, message, urgent, api });
+
+      // Send to API with selected API
+      const response = await chatAPI.sendMessage(currentSession.id, message, urgent, api);
+
+      // Debug: Log after backend call
+      console.log('[sendMessage] Backend response:', response);
+      // (No setMessages for AI message here; rely on socket event)
 
     } catch (error) {
       toast.error('Failed to send message');
       console.error('Send message error:', error);
+      // Debug: Log error
+      console.log('[sendMessage] Backend error:', error);
     } finally {
       setLoading(false);
       setAiStatus(null);
@@ -131,6 +154,20 @@ export const ChatProvider = ({ children }) => {
     setAiStatus(null);
   };
 
+  const deleteSession = async (sessionId) => {
+    try {
+      await historyAPI.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      if (currentSession && currentSession.id === sessionId) {
+        setCurrentSession(null);
+        setMessages([]);
+      }
+      toast.success('Chat deleted');
+    } catch (error) {
+      toast.error('Failed to delete chat');
+    }
+  };
+
   const value = {
     currentSession,
     messages,
@@ -140,6 +177,11 @@ export const ChatProvider = ({ children }) => {
     sendMessage,
     clearSession,
     socket,
+    sessions,
+    selectSession,
+    selectedApi,
+    setSelectedApi,
+    deleteSession, // add to context
   };
 
   return (

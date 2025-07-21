@@ -45,7 +45,7 @@ class ChatController {
 
   async sendMessage(req, res) {
     try {
-      const { sessionId, message, urgent = false } = req.body;
+      const { sessionId, message, urgent = false, api } = req.body;
       const userId = req.user.id;
 
       if (!sessionId || !message) {
@@ -83,8 +83,38 @@ class ChatController {
       };
 
       // RAG: Retrieve relevant PDF passages for the query
-      const ragChunks = await ragService.retrieveRelevantPassages(message, 1, 500);
-      context.ragContext = ragChunks.join('\n---\n');
+      const ragResults = await ragService.retrieveRelevantPassages(message, 1, 500);
+      const bestRag = ragResults[0];
+      context.ragContext = bestRag ? bestRag.chunk : '';
+
+      // If no relevant RAG passages (score 0), block the answer
+      if (!bestRag || bestRag.score === 0 || !bestRag.chunk.trim()) {
+        const notFoundMsg = 'I could not find an answer in the provided legal documents.';
+        // Store a message for the user
+        await query(
+          'INSERT INTO messages (session_id, type, content) VALUES ($1, $2, $3)',
+          [sessionId, 'research_ai', notFoundMsg]
+        );
+        // Emit to socket if needed
+        const io = req.app.get('io');
+        io.to(sessionId).emit('ai-response', {
+          type: 'research_ai',
+          messageId: Date.now(),
+          content: notFoundMsg,
+          citations: [],
+          confidence: 0.0,
+          processingTime: 0,
+        });
+        return res.json({
+          success: true,
+          research: {
+            content: notFoundMsg,
+            citations: [],
+            confidence: 0.0,
+            processingTime: 0,
+          }
+        });
+      }
 
       // Check if Ollama is available
       const isOllamaAvailable = await ollamaService.checkConnection();
@@ -95,106 +125,203 @@ class ChatController {
 
       // Real-time updates via Socket.IO
       const io = req.app.get('io');
-      
       try {
-        // Stage 1: Research AI Response
-        io.to(sessionId).emit('ai-status', {
-          stage: 'research',
-          status: 'processing',
-          message: 'Researching legal information...'
-        });
+        let researchResponse, researchCitations, researchConfidence, researchTime;
+        let guidanceResponse, guidanceCitations, guidanceConfidence, guidanceTime;
+        let researchResult, guidanceResult;
+        // Only call the selected AI
+        if (api === 'research') {
+          // Stage 1: Research AI Response
+          io.to(sessionId).emit('ai-status', {
+            stage: 'research',
+            status: 'processing',
+            message: 'Researching legal information...'
+          });
 
-        const startResearch = Date.now();
-        const researchMessages = promptService.buildResearchMessages(message, context);
-        const researchResponse = await llmService.sendChat(researchMessages, { temperature: 0.3 });
-        const researchTime = Date.now() - startResearch;
+          const startResearch = Date.now();
+          const researchMessages = promptService.buildResearchMessages(message, context);
+          researchResponse = await llmService.sendChat(researchMessages, { temperature: 0.3 });
+          researchTime = Date.now() - startResearch;
 
-        const researchCitations = promptService.extractCitations(researchResponse.content);
-        const researchConfidence = promptService.extractConfidenceLevel(researchResponse.content);
+          researchCitations = promptService.extractCitations(researchResponse.content);
+          researchConfidence = promptService.extractConfidenceLevel(researchResponse.content);
 
-        // Store research response
-        const researchResult = await query(
-          `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, created_at`,
-          [sessionId, 'research_ai', researchResponse.content, JSON.stringify(researchCitations), researchConfidence, researchTime]
-        );
+          // Store research response
+          researchResult = await query(
+            `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, created_at`,
+            [sessionId, 'research_ai', researchResponse.content, JSON.stringify(researchCitations), researchConfidence, researchTime]
+          );
 
-        io.to(sessionId).emit('ai-response', {
-          type: 'research_ai',
-          messageId: researchResult.rows[0].id,
-          content: researchResponse.content,
-          citations: researchCitations,
-          confidence: researchConfidence,
-          processingTime: researchTime,
-        });
-
-        // Stage 2: Guidance AI Response
-        io.to(sessionId).emit('ai-status', {
-          stage: 'guidance',
-          status: 'processing',
-          message: 'Analyzing guidance recommendations...'
-        });
-
-        const startGuidance = Date.now();
-        const guidanceMessages = promptService.buildGuidanceMessages(message, researchResponse.content, context);
-        const guidanceResponse = await llmService.sendChat(guidanceMessages, { temperature: 0.5 });
-        const guidanceTime = Date.now() - startGuidance;
-
-        const guidanceCitations = promptService.extractCitations(guidanceResponse.content);
-        const guidanceConfidence = promptService.extractConfidenceLevel(guidanceResponse.content);
-
-        // Store guidance response
-        const guidanceResult = await query(
-          `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, created_at`,
-          [sessionId, 'guidance_ai', guidanceResponse.content, JSON.stringify(guidanceCitations), guidanceConfidence, guidanceTime]
-        );
-
-        io.to(sessionId).emit('ai-response', {
-          type: 'guidance_ai',
-          messageId: guidanceResult.rows[0].id,
-          content: guidanceResponse.content,
-          citations: guidanceCitations,
-          confidence: guidanceConfidence,
-          processingTime: guidanceTime,
-        });
-
-        io.to(sessionId).emit('ai-status', {
-          stage: 'complete',
-          status: 'completed',
-          message: 'Response generated successfully'
-        });
-
-        // Log analytics event
-        await query(
-          `INSERT INTO analytics_events (user_id, event_type, event_data)
-           VALUES ($1, $2, $3)`,
-          [userId, 'message_processed', {
-            sessionId,
-            researchTime,
-            guidanceTime,
-            totalTime: researchTime + guidanceTime,
-            urgent,
-          }]
-        );
-
-        res.json({
-          success: true,
-          research: {
+          io.to(sessionId).emit('ai-response', {
+            type: 'research_ai',
+            messageId: researchResult.rows[0].id,
             content: researchResponse.content,
             citations: researchCitations,
             confidence: researchConfidence,
             processingTime: researchTime,
-          },
-          guidance: {
+          });
+
+          res.json({
+            success: true,
+            research: {
+              content: researchResponse.content,
+              citations: researchCitations,
+              confidence: researchConfidence,
+              processingTime: researchTime,
+            }
+          });
+        } else if (api === 'guidance') {
+          // Stage 2: Guidance AI Response
+          io.to(sessionId).emit('ai-status', {
+            stage: 'guidance',
+            status: 'processing',
+            message: 'Analyzing guidance recommendations...'
+          });
+
+          // For guidance, we still need to generate research first for context
+          const startResearch = Date.now();
+          const researchMessages = promptService.buildResearchMessages(message, context);
+          researchResponse = await llmService.sendChat(researchMessages, { temperature: 0.3 });
+          researchTime = Date.now() - startResearch;
+
+          // Now generate guidance
+          const startGuidance = Date.now();
+          const guidanceMessages = promptService.buildGuidanceMessages(message, researchResponse.content, context);
+          guidanceResponse = await llmService.sendChat(guidanceMessages, { temperature: 0.5 });
+          guidanceTime = Date.now() - startGuidance;
+
+          guidanceCitations = promptService.extractCitations(guidanceResponse.content);
+          guidanceConfidence = promptService.extractConfidenceLevel(guidanceResponse.content);
+
+          // Store guidance response
+          guidanceResult = await query(
+            `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, created_at`,
+            [sessionId, 'guidance_ai', guidanceResponse.content, JSON.stringify(guidanceCitations), guidanceConfidence, guidanceTime]
+          );
+
+          io.to(sessionId).emit('ai-response', {
+            type: 'guidance_ai',
+            messageId: guidanceResult.rows[0].id,
             content: guidanceResponse.content,
             citations: guidanceCitations,
             confidence: guidanceConfidence,
             processingTime: guidanceTime,
-          },
-        });
+          });
+
+          res.json({
+            success: true,
+            guidance: {
+              content: guidanceResponse.content,
+              citations: guidanceCitations,
+              confidence: guidanceConfidence,
+              processingTime: guidanceTime,
+            }
+          });
+        } else {
+          // Default: call both (legacy)
+          // Stage 1: Research AI Response
+          io.to(sessionId).emit('ai-status', {
+            stage: 'research',
+            status: 'processing',
+            message: 'Researching legal information...'
+          });
+
+          const startResearch = Date.now();
+          const researchMessages = promptService.buildResearchMessages(message, context);
+          researchResponse = await llmService.sendChat(researchMessages, { temperature: 0.3 });
+          researchTime = Date.now() - startResearch;
+
+          const researchCitations = promptService.extractCitations(researchResponse.content);
+          const researchConfidence = promptService.extractConfidenceLevel(researchResponse.content);
+
+          // Store research response
+          researchResult = await query(
+            `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, created_at`,
+            [sessionId, 'research_ai', researchResponse.content, JSON.stringify(researchCitations), researchConfidence, researchTime]
+          );
+
+          io.to(sessionId).emit('ai-response', {
+            type: 'research_ai',
+            messageId: researchResult.rows[0].id,
+            content: researchResponse.content,
+            citations: researchCitations,
+            confidence: researchConfidence,
+            processingTime: researchTime,
+          });
+
+          // Stage 2: Guidance AI Response
+          io.to(sessionId).emit('ai-status', {
+            stage: 'guidance',
+            status: 'processing',
+            message: 'Analyzing guidance recommendations...'
+          });
+
+          const startGuidance = Date.now();
+          const guidanceMessages = promptService.buildGuidanceMessages(message, researchResponse.content, context);
+          guidanceResponse = await llmService.sendChat(guidanceMessages, { temperature: 0.5 });
+          guidanceTime = Date.now() - startGuidance;
+
+          const guidanceCitations = promptService.extractCitations(guidanceResponse.content);
+          const guidanceConfidence = promptService.extractConfidenceLevel(guidanceResponse.content);
+
+          // Store guidance response
+          guidanceResult = await query(
+            `INSERT INTO messages (session_id, type, content, citations, confidence_score, processing_time)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, created_at`,
+            [sessionId, 'guidance_ai', guidanceResponse.content, JSON.stringify(guidanceCitations), guidanceConfidence, guidanceTime]
+          );
+
+          io.to(sessionId).emit('ai-response', {
+            type: 'guidance_ai',
+            messageId: guidanceResult.rows[0].id,
+            content: guidanceResponse.content,
+            citations: guidanceCitations,
+            confidence: guidanceConfidence,
+            processingTime: guidanceTime,
+          });
+
+          io.to(sessionId).emit('ai-status', {
+            stage: 'complete',
+            status: 'completed',
+            message: 'Response generated successfully'
+          });
+
+          // Log analytics event
+          await query(
+            `INSERT INTO analytics_events (user_id, event_type, event_data)
+             VALUES ($1, $2, $3)`,
+            [userId, 'message_processed', {
+              sessionId,
+              researchTime,
+              guidanceTime,
+              totalTime: researchTime + guidanceTime,
+              urgent,
+            }]
+          );
+
+          res.json({
+            success: true,
+            research: {
+              content: researchResponse.content,
+              citations: researchCitations,
+              confidence: researchConfidence,
+              processingTime: researchTime,
+            },
+            guidance: {
+              content: guidanceResponse.content,
+              citations: guidanceCitations,
+              confidence: guidanceConfidence,
+              processingTime: guidanceTime,
+            },
+          });
+        }
 
       } catch (aiError) {
         logger.error('AI processing error:', aiError);

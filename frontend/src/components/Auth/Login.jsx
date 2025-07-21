@@ -28,15 +28,8 @@ const Login = () => {
   };
 
   return (
-    <Container component="main" maxWidth="xs">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Container component="main" maxWidth="xs" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <Paper
           elevation={3}
           sx={{
@@ -45,16 +38,19 @@ const Login = () => {
             flexDirection: 'column',
             alignItems: 'center',
             width: '100%',
+            bgcolor: 'background.paper',
+            boxShadow: '0px 4px 20px rgba(0,0,0,0.06)',
+            borderRadius: 3,
           }}
         >
-          <Typography component="h1" variant="h5">
+          <Typography component="h1" variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
             Sign in
           </Typography>
           <Box
             component="form"
             onSubmit={handleSubmit}
             noValidate
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, width: '100%' }}
           >
             <TextField
               margin="normal"
@@ -95,8 +91,8 @@ const Login = () => {
             </Box>
           </Box>
         </Paper>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

@@ -52,7 +52,7 @@ async function retrieveRelevantPassages(query, topN = 3, chunkSize = 1000) {
   });
   // Sort by score descending, take top N
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topN).map(s => s.chunk);
+  return scored.slice(0, topN);
 }
 
 module.exports = { extractTextFromRagDocs, retrieveRelevantPassages };

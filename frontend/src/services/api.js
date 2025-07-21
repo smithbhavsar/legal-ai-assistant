@@ -40,8 +40,8 @@ export const chatAPI = {
     return response.data;
   },
 
-  sendMessage: async (sessionId, message, urgent = false) => {
-    const response = await api.post('/chat/message', { sessionId, message, urgent });
+  sendMessage: async (sessionId, message, urgent = false, selectedApi = 'research') => {
+    const response = await api.post('/chat/message', { sessionId, message, urgent, api: selectedApi });
     return response.data;
   },
 };
@@ -54,6 +54,11 @@ export const historyAPI = {
 
   getSession: async (sessionId) => {
     const response = await api.get(`/history/session/${sessionId}`);
+    return response.data;
+  },
+
+  deleteSession: async (sessionId) => {
+    const response = await api.delete(`/history/session/${sessionId}`);
     return response.data;
   },
 };
