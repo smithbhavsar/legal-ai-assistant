@@ -15,6 +15,13 @@ const InputField = ({ loading }) => {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
+
   return (
     <Box>
       <ToggleButtonGroup
@@ -46,6 +53,7 @@ const InputField = ({ loading }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={loading}
+          onKeyDown={handleKeyDown}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: '12px',

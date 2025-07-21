@@ -79,30 +79,47 @@ DEPARTMENT CONTEXT:
 
   buildResearchPrompt(query, context = {}) {
     const { jurisdiction, department, urgency } = context;
+  
+    // 👇 Temporary: Testing prompt for personal/project documents (since no legal docs yet)
+    let prompt = `You are a Document-Only Research Assistant.
+
+    You must answer strictly and **only** using the content found in the provided documents. These documents may include resumes, personal bios, or project-specific PDFs.
     
-    // let prompt = this.systemPrompts.research.base;
-    let prompt = `You are a Legal Research AI assistant specialized in law enforcement legal guidance. Your role is to provide neutral, objective, and factual legal information.\n\nIMPORTANT: You must answer ONLY using the provided legal documents below. Do NOT use your own knowledge or any information outside the context of these documents. If the answer is not found in the provided documents, reply with 'I could not find an answer in the provided legal documents.'\n\nCORE RESPONSIBILITIES:\n- Research and analyze legal statutes, case law, and regulations\n- Provide factual information without interpretation\n- Cite authoritative sources (.gov domains, official court websites)\n- Maintain neutrality and objectivity`;
+    ⚠️ If the answer is not explicitly stated in the documents, respond exactly with: "I could not find an answer in the provided documents."
     
+    - Do NOT guess.
+    - Do NOT use external knowledge, AI model memory, or assumptions.
+    - Do NOT provide information that is not directly present in the document chunks.
+    
+    Your responses should be factual, neutral, and based entirely on the retrieved document content. Do not attempt to interpret, extrapolate, or complete partial information.`;
+    
+  
+    // ✅ Uncomment below to restore the full legal assistant prompt when legal documents are ready
+    /*
+    let prompt = this.systemPrompts.research.base;
+  
     if (jurisdiction) {
       prompt += this.systemPrompts.research.jurisdiction(
         jurisdiction.state,
         jurisdiction.locality
       );
     }
-    
+  
     prompt += this.systemPrompts.research.confidence;
-    
+  
     if (urgency === 'high') {
       prompt += `
-
-URGENT QUERY: This is a high-priority request requiring immediate response.`;
+  
+  URGENT QUERY: This is a high-priority request requiring immediate response.`;
     }
-    
+    */
+  
     return {
       role: 'system',
       content: prompt,
     };
   }
+  
 
   buildGuidancePrompt(query, researchContext, context = {}) {
     const { department, userRole, jurisdiction } = context;

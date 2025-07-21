@@ -9,11 +9,22 @@ import {
 import { analyticsAPI } from '../../services/api';
 
 const DataCard = ({ title, value, unit }) => (
-  <Paper sx={{ p: 2, textAlign: 'center' }}>
-    <Typography variant="h6" color="text.secondary">
+  <Paper sx={{
+    p: 2,
+    textAlign: 'center',
+    height: 140,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 3,
+    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+    minWidth: 180,
+  }}>
+    <Typography variant="h6" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
       {title}
     </Typography>
-    <Typography variant="h4" component="div" fontWeight="bold">
+    <Typography variant="h4" component="div" fontWeight="bold" sx={{ mb: 0.5 }}>
       {value}
       {unit && (
         <Typography variant="body2" component="span" sx={{ ml: 0.5 }}>
@@ -31,8 +42,8 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const response = await analyticsAPI.getAnalytics();
-        setAnalytics(response.data);
+        const analytics = await analyticsAPI.getUsage();
+        setAnalytics(analytics);
       } catch (error) {
         console.error('Failed to fetch analytics:', error);
       } finally {
@@ -50,29 +61,35 @@ const Dashboard = () => {
     );
   }
 
+  // Defensive: If analytics is null, show all cards as '-'
+  const totalUsers = analytics?.totalUsers ?? '-';
+  const totalSessions = analytics?.totalSessions ?? '-';
+  const averageConfidence = analytics?.averageConfidence !== undefined && analytics?.averageConfidence !== null ? (analytics.averageConfidence * 100).toFixed(1) : '-';
+  const averageResponseTime = analytics?.averageResponseTime !== undefined && analytics?.averageResponseTime !== null ? analytics.averageResponseTime.toFixed(0) : '-';
+
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
+    <Box sx={{ maxWidth: 1100, mx: 'auto', p: { xs: 1, md: 3 } }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 3 }}>
         Analytics Dashboard
       </Typography>
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
-          <DataCard title="Total Users" value={analytics?.totalUsers} />
+          <DataCard title="Total Users" value={totalUsers} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <DataCard title="Total Chats" value={analytics?.totalSessions} />
+          <DataCard title="Total Chats" value={totalSessions} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <DataCard
             title="Avg. Confidence"
-            value={analytics?.averageConfidence?.toFixed(2)}
+            value={averageConfidence}
             unit="%"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <DataCard
             title="Avg. Response Time"
-            value={analytics?.averageResponseTime?.toFixed(0)}
+            value={averageResponseTime}
             unit="ms"
           />
         </Grid>

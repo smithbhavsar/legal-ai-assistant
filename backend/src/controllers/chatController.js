@@ -83,13 +83,13 @@ class ChatController {
       };
 
       // RAG: Retrieve relevant PDF passages for the query
-      const ragResults = await ragService.retrieveRelevantPassages(message, 1, 500);
-      const bestRag = ragResults[0];
-      context.ragContext = bestRag ? bestRag.chunk : '';
+      const { topChunks, bestMatchScore } = await ragService.retrieveRelevantPassages(message, 3);
+      const ragContext = topChunks.map(c => c.chunk).join('\n---\n');
+      context.ragContext = ragContext;
 
-      // If no relevant RAG passages (score 0), block the answer
-      if (!bestRag || bestRag.score === 0 || !bestRag.chunk.trim()) {
-        const notFoundMsg = 'I could not find an answer in the provided legal documents.';
+      // If no relevant RAG passages (score < 0.1), block the answer
+      if (bestMatchScore < -0.3) {
+        const notFoundMsg = 'I could not find an answer in the provided documents.';
         // Store a message for the user
         await query(
           'INSERT INTO messages (session_id, type, content) VALUES ($1, $2, $3)',
@@ -116,6 +116,9 @@ class ChatController {
         });
       }
 
+      // Build strict RAG prompt
+      const strictPrompt = `Using ONLY the documents retrieved below, answer this question:\n${message}\n\nRelevant Documents:\n${ragContext}\n\nIf the answer is not explicitly mentioned, respond: \"I could not find an answer in the provided documents.\"`;
+      // Use strictPrompt in LLM call
       // Check if Ollama is available
       const isOllamaAvailable = await ollamaService.checkConnection();
       
