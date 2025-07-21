@@ -18,12 +18,6 @@ router.get('/usage', requireRole(['supervisor', 'admin']), async (req, res) => {
     // Average response time (from messages)
     const responseTimeResult = await query('SELECT AVG(processing_time) FROM messages WHERE processing_time IS NOT NULL');
 
-    // Debug logging
-    console.log('usersResult:', usersResult.rows);
-    console.log('sessionsResult:', sessionsResult.rows);
-    console.log('confidenceResult:', confidenceResult.rows);
-    console.log('responseTimeResult:', responseTimeResult.rows);
-
     res.json({
       totalUsers: parseInt(usersResult.rows[0].count, 10),
       totalSessions: parseInt(sessionsResult.rows[0].count, 10),
