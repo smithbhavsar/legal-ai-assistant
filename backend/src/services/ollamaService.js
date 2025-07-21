@@ -22,8 +22,18 @@ class OllamaService {
     }
   }
 
-  async generateResponse(messages, options = {}) {
+  /**
+   * Send a chat completion request to Ollama with the given messages array
+   * @param {Array} messages - Array of message objects [{role, content}]
+   * @param {Object} options - LLM options (temperature, etc.)
+   */
+  async sendChat(messages, options = {}) {
     try {
+      // Log the system and user prompt
+      const systemMsg = messages.find(m => m.role === 'system');
+      const userMsg = messages.find(m => m.role === 'user');
+      if (systemMsg) logger.info('Ollama system prompt', { prompt: systemMsg.content });
+      if (userMsg) logger.info('Ollama user prompt', { prompt: userMsg.content });
       const payload = {
         model: this.model,
         messages,
@@ -34,9 +44,7 @@ class OllamaService {
           ...options,
         },
       };
-
       logger.info('Sending request to Ollama', { model: this.model });
-      
       const response = await axios.post(
         `${this.baseUrl}/api/chat`,
         payload,
@@ -47,7 +55,6 @@ class OllamaService {
           },
         }
       );
-
       if (response.data && response.data.message) {
         return {
           content: response.data.message.content,
@@ -55,7 +62,6 @@ class OllamaService {
           model: response.data.model || this.model,
         };
       }
-
       throw new Error('Invalid response format from Ollama');
     } catch (error) {
       logger.error('Ollama API error:', {
@@ -63,64 +69,11 @@ class OllamaService {
         status: error.response?.status,
         data: error.response?.data,
       });
-      
       if (error.code === 'ECONNREFUSED') {
         throw new Error('Ollama service is not running. Please start Ollama first.');
       }
-      
       throw new Error(`Ollama API error: ${error.message}`);
     }
-  }
-
-  async generateResearchResponse(query, context = {}) {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a Legal Research AI assistant. Your role is to provide neutral, objective, and factual legal information. 
-
-IMPORTANT INSTRUCTIONS:
-1. Provide only factual, neutral legal information
-2. Always cite authoritative sources (.gov domains, official court websites, statutes)
-3. Do not provide legal advice or recommendations
-4. Include confidence levels for your information (High, Medium, Low)
-4. Structure your response with clear citations
-5. If information is uncertain, clearly state limitations
-
-Context: ${JSON.stringify(context)}`,
-      },
-      {
-        role: 'user',
-        content: query,
-      },
-    ];
-
-    return await this.generateResponse(messages, { temperature: 0.3 });
-  }
-
-  async generateGuidanceResponse(query, researchContext, context = {}) {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a Police Supervisor AI providing authoritative guidance to law enforcement officers. You have command presence and provide clear, directive recommendations.
-
-IMPORTANT INSTRUCTIONS:
-1. Provide clear, authoritative guidance based on the research provided
-2. Use confident, supervisory tone ("You should...", "The proper procedure is...")
-3. Reference specific legal authorities and departmental policies
-4. Include confidence levels for recommendations (High, Medium, Low)
-5. Always prioritize officer safety and constitutional compliance
-6. Structure guidance as clear action items
-
-Research Context: ${researchContext}
-Department Context: ${JSON.stringify(context)}`,
-      },
-      {
-        role: 'user',
-        content: query,
-      },
-    ];
-
-    return await this.generateResponse(messages, { temperature: 0.5 });
   }
 }
 

@@ -2,6 +2,7 @@ const { query } = require('../config/database');
 const ollamaService = require('../services/ollamaService');
 const promptService = require('../services/promptService');
 const ragService = require('../services/ragService');
+const llmService = require('../services/llmService');
 const logger = require('../utils/logger');
 
 class ChatController {
@@ -104,10 +105,8 @@ class ChatController {
         });
 
         const startResearch = Date.now();
-        const researchResponse = await ollamaService.generateResearchResponse(
-          message,
-          context
-        );
+        const researchMessages = promptService.buildResearchMessages(message, context);
+        const researchResponse = await llmService.sendChat(researchMessages, { temperature: 0.3 });
         const researchTime = Date.now() - startResearch;
 
         const researchCitations = promptService.extractCitations(researchResponse.content);
@@ -138,11 +137,8 @@ class ChatController {
         });
 
         const startGuidance = Date.now();
-        const guidanceResponse = await ollamaService.generateGuidanceResponse(
-          message,
-          researchResponse.content,
-          context
-        );
+        const guidanceMessages = promptService.buildGuidanceMessages(message, researchResponse.content, context);
+        const guidanceResponse = await llmService.sendChat(guidanceMessages, { temperature: 0.5 });
         const guidanceTime = Date.now() - startGuidance;
 
         const guidanceCitations = promptService.extractCitations(guidanceResponse.content);

@@ -80,7 +80,8 @@ DEPARTMENT CONTEXT:
   buildResearchPrompt(query, context = {}) {
     const { jurisdiction, department, urgency } = context;
     
-    let prompt = this.systemPrompts.research.base;
+    // let prompt = this.systemPrompts.research.base;
+    let prompt = `You are a Legal Research AI assistant specialized in law enforcement legal guidance. Your role is to provide neutral, objective, and factual legal information.\n\nIMPORTANT: You must answer ONLY using the provided legal documents below. Do NOT use your own knowledge or any information outside the context of these documents. If the answer is not found in the provided documents, reply with 'I could not find an answer in the provided legal documents.'\n\nCORE RESPONSIBILITIES:\n- Research and analyze legal statutes, case law, and regulations\n- Provide factual information without interpretation\n- Cite authoritative sources (.gov domains, official court websites)\n- Maintain neutrality and objectivity`;
     
     if (jurisdiction) {
       prompt += this.systemPrompts.research.jurisdiction(
@@ -154,7 +155,7 @@ OFFICER CONTEXT: Providing guidance to ${userRole} level officer`;
     const urls = response.match(urlRegex) || [];
     
     // Extract statute references
-    const statuteRegex = /(\d+\s+U\.S\.C\.?\s*§?\s*\d+|\d+\s+USC\s+\d+)/g;
+    const statuteRegex = /(\d+\s+U\.S\.C\.?\s*ï¿½?\s*\d+|\d+\s+USC\s+\d+)/g;
     const statutes = response.match(statuteRegex) || [];
     
     // Extract case law references
@@ -166,6 +167,23 @@ OFFICER CONTEXT: Providing guidance to ${userRole} level officer`;
     cases.forEach(caseRef => citations.push({ type: 'case', source: caseRef }));
     
     return citations;
+  }
+
+  buildResearchMessages(query, context = {}) {
+    const systemPrompt = this.buildResearchPrompt(query, context).content +
+      (context.ragContext ? `\n\nRelevant Legal Documents (retrieved):\n${context.ragContext}` : '');
+    return [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: query },
+    ];
+  }
+
+  buildGuidanceMessages(query, researchContext, context = {}) {
+    const systemPrompt = this.buildGuidancePrompt(query, researchContext, context).content;
+    return [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: query },
+    ];
   }
 }
 

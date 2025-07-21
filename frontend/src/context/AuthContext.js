@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    setLoading(true);
     try {
       const response = await authAPI.login(email, password);
       
@@ -55,6 +56,8 @@ export const AuthProvider = ({ children }) => {
       const message = error.response?.data?.error || 'Login failed';
       toast.error(message);
       return { success: false, error: message };
+    } finally {
+      setLoading(false);
     }
   };
 
