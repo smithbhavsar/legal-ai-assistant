@@ -69,14 +69,23 @@ export const ChatProvider = ({ children }) => {
     fetchSessions();
   }, []);
 
+  // After deleting a session, auto-select the next available session if any
+  useEffect(() => {
+    if (!currentSession && sessions.length > 0) {
+      // Auto-select the first session
+      selectSession(sessions[0].id);
+    }
+  }, [currentSession, sessions]);
+
   const selectSession = async (sessionId) => {
+    if (!sessionId) return;
     try {
       setLoading(true);
       const { session, messages } = await historyAPI.getSession(sessionId);
       setCurrentSession(session);
       setMessages((messages || []).map(msg => ({ ...msg, timestamp: msg.created_at || msg.timestamp })));
-      // Join socket room
-      if (socket) {
+      // Join socket room only if session exists
+      if (socket && session && session.id) {
         socket.emit('join-session', session.id);
       }
     } catch (error) {

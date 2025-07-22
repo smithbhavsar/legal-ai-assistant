@@ -19,27 +19,13 @@ function App() {
         <ChatProvider>
           <Router>
             <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/chat" element={<ProtectedRoute><DualPaneChat /></ProtectedRoute>} />
+                <Route path="/analytics" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              </Route>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route element={<AppLayout />}>
-                <Route
-                  path="/chat"
-                  element={
-                    <ProtectedRoute>
-                      <DualPaneChat />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/analytics"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-              </Route>
-              <Route path="*" element={<Navigate to="/chat" />} />
+              <Route path="*" element={<Navigate to="/chat" replace />} />
             </Routes>
           </Router>
         </ChatProvider>

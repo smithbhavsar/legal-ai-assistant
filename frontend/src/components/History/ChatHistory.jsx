@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   List,
@@ -9,29 +9,36 @@ import {
   Button,
   Divider,
   IconButton,
-  Menu,
-  MenuItem,
+  Paper,
+  MenuItem
 } from '@mui/material';
 import { useChat } from '../../context/ChatContext';
 import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ClickAwayListener from '@mui/material/ClickAwayListener';
 import dayjs from 'dayjs';
 
 const ChatHistory = ({ onSelect }) => {
   const { sessions, currentSession, selectSession, startNewSession, deleteSession } = useChat();
-  const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuSessionId, setMenuSessionId] = useState(null);
   const [hoveredSessionId, setHoveredSessionId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
 
   const handleMenuOpen = (event, sessionId) => {
-    setMenuAnchor(event.currentTarget);
+    event.preventDefault();
     setMenuSessionId(sessionId);
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMenuPosition({
+      top: rect.top + rect.height,
+      left: rect.left,
+    });
   };
 
   const handleMenuClose = () => {
-    setMenuAnchor(null);
     setMenuSessionId(null);
+    setMenuPosition(null);
   };
 
   const handleDelete = async () => {
@@ -42,7 +49,7 @@ const ChatHistory = ({ onSelect }) => {
   };
 
   return (
-    <Box sx={{ p: 2, height: '100%', overflowY: 'auto' }}>
+    <Box sx={{ p: 2, height: '100%', overflowY: 'auto', position: 'relative' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">History</Typography>
         <Button
@@ -72,6 +79,7 @@ const ChatHistory = ({ onSelect }) => {
               sx={{
                 display: 'flex',
                 alignItems: 'center',
+                px: 1,
               }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -81,60 +89,72 @@ const ChatHistory = ({ onSelect }) => {
                     selectSession(session.id);
                     if (onSelect) onSelect();
                   }}
+                  sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}
                 >
-                  <ListItemText primary={label} />
+                  <ListItemText
+                    primary={label}
+                    primaryTypographyProps={{
+                      noWrap: true,
+                      sx: {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      },
+                    }}
+                    sx={{ flex: 1, minWidth: 0 }}
+                  />
+                  <Box sx={{ width: 32, display: 'flex', justifyContent: 'center' }}>
+                    {hoveredSessionId === session.id && (
+                      <IconButton
+                        edge="end"
+                        onClick={(e) => handleMenuOpen(e, session.id)}
+                        size="small"
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
                 </ListItemButton>
               </Box>
-
-              {hoveredSessionId === session.id && (
-                <IconButton
-                  edge="end"
-                  onClick={(e) => handleMenuOpen(e, session.id)}
-                  sx={{ ml: 1 }}
-                >
-                  <MoreVertIcon />
-                </IconButton>
-              )}
             </ListItem>
           );
         })}
       </List>
 
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        PaperProps={{
-          sx: {
+      {/* Floating Context Menu */}
+      {menuPosition && (
+        <ClickAwayListener onClickAway={handleMenuClose}>
+        <Paper
+          sx={{
+            position: 'fixed',
+            top: menuPosition.top,
+            left: menuPosition.left,
+            zIndex: 1500,
             minWidth: 140,
             borderRadius: 2,
-            boxShadow: 3,
+            boxShadow: 4,
             p: 0.5,
-            zIndex: 2000,
-          },
-        }}
-        container={document.body}
-      >
-        <MenuItem
-          onClick={handleDelete}
-          sx={{
-            color: 'error.main',
-            fontWeight: 500,
-            px: 2,
-            py: 1.2,
-            borderRadius: 1,
-            gap: 1,
-            '&:hover': {
-              bgcolor: 'error.light',
-              color: 'error.dark',
-            },
           }}
         >
-          <DeleteOutlineIcon fontSize="small" /> Delete
-        </MenuItem>
-      </Menu>
+          <MenuItem
+            onClick={handleDelete}
+            sx={{
+              color: 'error.main',
+              fontWeight: 500,
+              px: 2,
+              py: 1.2,
+              borderRadius: 1,
+              gap: 1,
+              '&:hover': {
+                bgcolor: 'action.hover'
+              },
+            }}
+          >
+            <DeleteOutlineIcon fontSize="small" /> Delete
+          </MenuItem>
+        </Paper>
+        </ClickAwayListener>
+      )}
     </Box>
   );
 };
