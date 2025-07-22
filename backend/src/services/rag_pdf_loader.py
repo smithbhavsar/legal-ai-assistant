@@ -1,9 +1,8 @@
 from sentence_transformers import SentenceTransformer
 from chromadb import HttpClient
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-import os
-import fitz  # PyMuPDF
 from pathlib import Path
+import os
 
 # Initialize ChromaDB REST client
 client = HttpClient(host="localhost", port=8000)
@@ -17,39 +16,48 @@ text_splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=200,
 )
 
-def extract_text_chunks_from_pdfs(pdf_dir):
+def get_all_markdowns(md_root_dir: str):
+    """
+    Recursively collects all .md files from the directory.
+    """
+    md_dir_path = Path(md_root_dir)
+    if not md_dir_path.exists():
+        raise FileNotFoundError(f"The provided directory does not exist: {md_root_dir}")
+
+    md_files = list(md_dir_path.rglob("*.md"))
+    print(f"📂 Scanning directory: {md_root_dir}")
+    print(f"📄 Found {len(md_files)} markdown file(s)")
+
+    return md_files
+
+def extract_text_chunks_from_mds(md_paths):
     chunks = []
-    print(f"🔍 Looking for PDFs in: {pdf_dir}")
+    for md_path in md_paths:
+        filename = os.path.basename(md_path)
+        print(f"📄 Reading: {filename}")
 
-    for filename in os.listdir(pdf_dir):
-        if filename.endswith(".pdf"):
-            pdf_path = os.path.join(pdf_dir, filename)
-            print(f"📄 Processing: {filename}")
+        try:
+            with open(md_path, "r", encoding="utf-8") as f:
+                text = f.read()
 
-            try:
-                doc = fitz.open(pdf_path)
-                print(f"📄 Pages: {len(doc)}")
+            print(f"📝 {filename} has {len(text)} characters")
 
-                full_text = ""
-                for page in doc:
-                    text = page.get_text()
-                    full_text += text + "\n"
+            md_chunks = text_splitter.split_text(text)
+            valid_chunks = [chunk.strip() for chunk in md_chunks if chunk.strip()]
+            chunks.extend(valid_chunks)
 
-                print(f"📄 Extracted {len(full_text)} characters")
+            print(f"🧩 {filename} split into {len(valid_chunks)} chunks")
 
-                # Use LangChain splitter
-                pdf_chunks = text_splitter.split_text(full_text)
-                chunks.extend([chunk.strip() for chunk in pdf_chunks if chunk.strip()])
+        except Exception as e:
+            print(f"⚠️ Error reading {filename}: {e}")
 
-            except Exception as e:
-                print(f"⚠️ Error processing {filename}: {e}")
-
-    print(f"🧩 Total valid chunks: {len(chunks)}")
+    print(f"🧠 Total valid chunks extracted: {len(chunks)}")
     return chunks
 
-def build_vector_db(pdf_dir):
-    print("📄 Starting vector DB build...")
-    chunks = extract_text_chunks_from_pdfs(pdf_dir)
+def build_vector_db(md_dir):
+    print("🚀 Starting vector DB build...")
+    md_paths = get_all_markdowns(md_dir)
+    chunks = extract_text_chunks_from_mds(md_paths)
 
     if not chunks:
         print("❌ No valid chunks found. Exiting.")
@@ -74,9 +82,11 @@ def build_vector_db(pdf_dir):
     print(f"✅ Vector DB built with {len(chunks)} chunks.")
 
 if __name__ == "__main__":
-    # Resolve path assuming: rag_documents is a sibling of backend/
     SCRIPT_DIR = Path(__file__).resolve().parent
-    PROJECT_ROOT = SCRIPT_DIR.parent.parent  # go up from backend/src/services
-    PDF_DIR = Path(__file__).resolve().parents[3] / "rag_documents"
+    PROJECT_ROOT = SCRIPT_DIR.parent.parent
+    MD_DIR = PROJECT_ROOT / "rag_documents"
 
-    build_vector_db(str(PDF_DIR))
+    try:
+        build_vector_db(str(MD_DIR))
+    except FileNotFoundError as e:
+        print(f"❌ {e}")
