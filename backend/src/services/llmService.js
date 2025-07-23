@@ -1,7 +1,9 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const dotenv = require('dotenv');
+dotenv.config();
 
-const PERPLEXITY_API_KEY = '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';
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 /**

@@ -1,3 +1,5 @@
+const dotenv = require('dotenv');
+dotenv.config();
 const { InferenceClient } = require('@huggingface/inference');
 const { ChromaClient } = require('chromadb');
 const path = require('path');
@@ -6,7 +8,7 @@ const pdfParse = require('pdf-parse');
 const { spawn } = require('child_process');
 const logger = require('../utils/logger');
 
-const HUGGINGFACE_API_KEY = process.env.HF_API_KEY || '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';
+const HUGGINGFACE_API_KEY = process.env.HF_API_KEY;
 const client = new InferenceClient(HUGGINGFACE_API_KEY);
 const chroma = new ChromaClient();
 const COLLECTION_NAME = 'legal_rag_chunks';
