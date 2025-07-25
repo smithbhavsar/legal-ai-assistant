@@ -26,10 +26,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
+    // If error.response is undefined, it's a network error (backend down)
+    // Do NOT redirect, allow frontend to handle gracefully
     return Promise.reject(error);
   }
 );
