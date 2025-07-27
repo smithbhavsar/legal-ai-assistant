@@ -72,4 +72,27 @@ export const analyticsAPI = {
   },
 };
 
+const API_BASE_URL = '/api';
+
+export const fetchMessages = async (sessionId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/messages`, { params: { sessionId } });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    return [];
+  }
+};
+
+export const pollMessages = (sessionId, callback, interval = 5000) => {
+  const poll = async () => {
+    const messages = await fetchMessages(sessionId);
+    callback(messages);
+  };
+
+  const pollingInterval = setInterval(poll, interval);
+
+  return () => clearInterval(pollingInterval); // Return a function to stop polling
+};
+
 export default api;

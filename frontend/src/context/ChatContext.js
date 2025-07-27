@@ -21,7 +21,43 @@ export const ChatProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [sessions, setSessions] = useState([]);
-  const [selectedApi, setSelectedApi] = useState('research'); // 'research' or 'guidance'
+  const [selectedApi, setSelectedApi] = useState('research');
+  const sseRef = React.useRef(null);
+
+  // Open SSE connection when session changes
+  useEffect(() => {
+    if (!currentSession) return;
+    if (sseRef.current) {
+      sseRef.current.close();
+    }
+    // Use full backend URL for SSE
+    const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+    const sseUrl = `${backendUrl}/chat/stream?sessionId=${currentSession.id}`;
+    console.log('Opening SSE connection to:', sseUrl);
+    const eventSource = new window.EventSource(sseUrl);
+    sseRef.current = eventSource;
+    eventSource.onopen = () => {
+      console.log('SSE connection opened:', sseUrl);
+    };
+    eventSource.onmessage = (event) => {
+      console.log('SSE event received:', event.data);
+      try {
+        const newMessage = JSON.parse(event.data);
+        console.log('Parsed SSE message:', newMessage);
+        setMessages((prev) => [...prev, newMessage]);
+      } catch (err) {
+        console.error('SSE parse error:', err, event.data);
+      }
+    };
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      eventSource.close();
+    };
+    return () => {
+      eventSource.close();
+      sseRef.current = null;
+    };
+  }, [currentSession]);
 
   // Fetch sessions from API (history) after login
   const fetchSessions = async () => {

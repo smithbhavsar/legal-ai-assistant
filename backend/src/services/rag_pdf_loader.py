@@ -1,11 +1,10 @@
 from sentence_transformers import SentenceTransformer
-from chromadb import HttpClient
+import faiss
+import numpy as np
+import pickle
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from pathlib import Path
 import os
-
-# Initialize ChromaDB REST client
-client = HttpClient(host="localhost", port=8000)
 
 COLLECTION_NAME = "legal_rag_chunks"
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -63,23 +62,22 @@ def build_vector_db(md_dir):
         print("❌ No valid chunks found. Exiting.")
         return
 
+    # Get and normalize embeddings
     embeddings = model.encode(chunks, convert_to_numpy=True)
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    normalized_embeddings = embeddings / norms
 
-    try:
-        client.delete_collection(COLLECTION_NAME)
-        print("🗑️ Existing collection deleted.")
-    except:
-        print("ℹ️ No existing collection to delete or deletion failed.")
+    dim = normalized_embeddings.shape[1]
+    index = faiss.IndexFlatIP(dim)  # Cosine similarity via dot product on normalized vectors
+    index.add(normalized_embeddings)
 
-    collection = client.get_or_create_collection(COLLECTION_NAME)
+    faiss.write_index(index, "faiss_index.bin")
 
-    collection.add(
-        ids=[f"chunk_{i}" for i in range(len(chunks))],
-        documents=chunks,
-        embeddings=embeddings.tolist()
-    )
+    with open("faiss_chunks.pkl", "wb") as f:
+        pickle.dump(chunks, f)
 
-    print(f"✅ Vector DB built with {len(chunks)} chunks.")
+    print(f"✅ FAISS index (cosine similarity) built with {len(chunks)} chunks.")
+
 
 if __name__ == "__main__":
     SCRIPT_DIR = Path(__file__).resolve().parent

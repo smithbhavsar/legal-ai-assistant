@@ -23,3 +23,19 @@ Thumbs.db
 .idea/
 llms
 
+# Ignore FAISS binary and pickle files
+faiss_index.bin
+faiss_chunks.pkl
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore other Python build artifacts
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore logs
+*.log
+
+

@@ -1,7 +1,6 @@
 const axios = require('axios');
 const ollamaConfig = require('../config/ollama');
 const logger = require('../utils/logger');
-const { log } = require('winston');
 
 class OllamaService {
   constructor() {
