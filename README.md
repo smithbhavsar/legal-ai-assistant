@@ -10,19 +10,19 @@ The Legal AI Assistant is an AI-powered legal guidance system for law enforcemen
 - **Dual-Pane Chat Interface**: Side-by-side responses for research and guidance
 - **Model Toggle**: Switch between Ollama (local), Perplexity API (cloud), and more
 - **Session History Sidebar**: Persistent chat history and session management
-- **RAG from Markdown**: Extracts and embeds .md documents into ChromaDB for context-aware answers
+**RAG from Markdown**: Extracts and embeds .md documents into FAISS (via Python) for context-aware answers
 - **Citation System**: All responses include source citations and confidence levels
 - **User Authentication**: Role-based access (Officer, Supervisor, Admin)
-- **Real-time Processing**: WebSocket integration for live AI status updates
+**Real-time Processing**: Server-Sent Events (SSE) for live AI status updates
 - **Professional UI**: Responsive, modern Material UI design
 
 ## 🏗️ Architecture
 
 ### Tech Stack
-- **Frontend**: React 18, Material UI, Socket.IO Client
-- **Backend**: Node.js, Express.js, Socket.IO, JWT Authentication
-- **Vector Store**: ChromaDB (local, for RAG)
-- **LLM Integrations**: Ollama (Llama 3.1), Perplexity API, HuggingFace Embeddings
+- **Frontend**: React 18, Material UI, Server-Sent Events (SSE)
+- **Backend**: Node.js, Express.js, JWT Authentication, SSE
+- **Vector Store**: FAISS (local, for RAG, via Python FastAPI)
+- **LLM Integrations**: Perplexity API (primary), Ollama (optional, local), HuggingFace Embeddings
 - **Infrastructure**: Docker Compose for easy deployment
 
 ### Project Structure
@@ -33,7 +33,7 @@ legal-ai-assistant/
 │   │   ├── controllers/     # Route handlers
 │   │   ├── middleware/      # Auth, validation, error handling
 │   │   ├── routes/          # API routes
-│   │   ├── services/        # LLM, RAG, vector store, prompts
+│   │   ├── services/        # LLM, RAG (Python scripts, FastAPI), vector store, prompts
 │   │   └── config/          # Env configs
 │   └── rag_documents/       # Markdown docs for RAG
 ├── frontend/                # React + Material UI app
@@ -51,12 +51,14 @@ legal-ai-assistant/
 
 1. **Node.js** (v16+)
 2. **Ollama** with Llama 3.1 model (local LLM)
-3. **ChromaDB** (Python, for local vector store)
+3. **Python** (for FAISS vector store and FastAPI RAG server)
 4. **Git**
 5. **Docker & Docker Compose** (optional)
 
-### 1. Install Ollama and Llama 3.1
 
+### 1. (Optional) Install Ollama and Llama 3.1 (for local LLM)
+
+If you want to use Ollama locally instead of Perplexity API, install and run Ollama:
 ```bash
 # Windows: Download from https://ollama.com/download
 # macOS: brew install ollama
@@ -65,13 +67,28 @@ ollama pull llama3.1
 ollama serve
 ```
 
-### 2. Install ChromaDB (for RAG)
 
+### 2. Python RAG Setup (FAISS)
+
+Install Python dependencies:
 ```bash
-pip install chromadb sentence-transformers langchain
-# Start ChromaDB server (default: localhost:8000)
-chromadb run --host 0.0.0.0 --port 8000
+pip install -r requirements.txt
 ```
+
+#### Build the FAISS Vector Index
+This will scan all markdown files in `backend/rag_documents/` and build the FAISS index and chunk files:
+```bash
+cd backend/src/services
+python rag_pdf_loader.py
+```
+
+#### Start the FastAPI RAG Server
+This will serve the `/search` endpoint for the Node backend to call:
+```bash
+cd backend/src/services
+uvicorn rag_api:app --host 0.0.0.0 --port 5000
+```
+You should see FastAPI running at http://localhost:5000//docs
 
 ### 3. Clone and Setup Project
 
@@ -112,6 +129,10 @@ npm run dev
 # Terminal 2 - Frontend
 cd frontend
 npm start
+
+# Terminal 3 - Python RAG API (FastAPI)
+cd backend/src/services
+uvicorn rag_api:app --host 0.0.0.0 --port 8002
 ```
 
 **Option B: Concurrent Start**
@@ -134,8 +155,8 @@ docker-compose up -d
 - **Dual-Pane Chat**: Research and Guidance AI responses side-by-side
 - **Session History Sidebar**: Persistent chat sessions, easy navigation
 - **Model Toggle**: Switch between Ollama, Perplexity, etc. in chat
-- **RAG from Markdown**: .md files in `backend/rag_documents/` are embedded into ChromaDB for context-aware answers
-- **ChromaDB Integration**: Local vector store for fast, private retrieval
+- **RAG from Markdown**: .md files in `backend/rag_documents/` are embedded into FAISS for context-aware answers
+- **FAISS Integration**: Local vector store (Python) for fast, private retrieval
 - **Citations & Confidence**: Every answer includes sources and confidence badges
 - **Role-Based Auth**: Officer, Supervisor, Admin
 
@@ -147,6 +168,7 @@ See `.env.example` in both `backend/` and `frontend/` for all required variables
 - `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (backend)
 - `JWT_SECRET` (backend)
 - `REACT_APP_API_URL`, `REACT_APP_WS_URL` (frontend)
+- `RAG_API_URL` (backend, e.g. http://localhost:8002)
 
 ## 🧪 Testing & Troubleshooting
 
